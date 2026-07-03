@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RSVP — Mitchell and Isabella</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      background-color: #F7F5F0;
+      font-family: Georgia, serif;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding-left: 12vw;
+      padding-right: 12vw;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 480px;
+      width: 100%;
+    }
+
+    .step {
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      pointer-events: none;
+      position: absolute;
+    }
+
+    .step.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: all;
+      position: relative;
+    }
+
+    .step.exiting {
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: none;
+      position: absolute;
+    }
+
+    .prompt {
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #1a1a1a;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.6rem;
+      line-height: 1.6;
+    }
+
+    .input-line {
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: baseline;
+    }
+
+    .input-field {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      width: 1px;
+      height: 1px;
+    }
+
+    .typed-text {
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #1a1a1a;
+      letter-spacing: 0.06em;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 1px;
+      height: 0.85em;
+      background: #1a1a1a;
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .event-list {
+      margin-top: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .event-item {
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #1a1a1a;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.25s ease;
+    }
+
+    .event-item.selected {
+      color: #7B2020;
+    }
+
+    .continue-hint {
+      margin-top: 1.6rem;
+      font-size: 0.68rem;
+      color: #999;
+      letter-spacing: 0.04em;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .continue-hint.visible {
+      opacity: 1;
+    }
+
+    .confirmation {
+      font-size: 0.95rem;
+      font-weight: 300;
+      color: #1a1a1a;
+      line-height: 1.7;
+      letter-spacing: 0.01em;
+      font-style: italic;
+    }
+
+    .steps-wrapper {
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="steps-wrapper">
+
+    <!-- Step 1: Name -->
+    <div class="step active" id="step-name">
+      <p class="prompt">If planning to attend our celebration please type your first and last name and press enter.</p>
+      <div class="input-line">
+        <input class="input-field" id="input-name" type="text" autocomplete="off" spellcheck="false" autofocus />
+        <span class="typed-text" id="typed-name"></span><span class="cursor"></span>
+      </div>
+    </div>
+
+    <!-- Step 2: Events -->
+    <div class="step" id="step-events">
+      <p class="prompt">Please indicate which events you were both invited and plan to attend. Click all that apply.</p>
+      <div class="event-list">
+        <span class="event-item" data-event="Sealing">Sealing</span>
+        <span class="event-item" data-event="Ring Ceremony">Ring Ceremony</span>
+        <span class="event-item" data-event="Reception">Reception</span>
+      </div>
+      <p class="continue-hint" id="continue-hint">Press enter to continue.</p>
+    </div>
+
+    <!-- Step 3: Confirmation -->
+    <div class="step" id="step-done">
+      <p class="confirmation" id="confirm-text"></p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const FORMSPREE_ENDPOINT = 'https://formspree.io/f/xzdlbpqa';
+
+  const stepName   = document.getElementById('step-name');
+  const stepEvents = document.getElementById('step-events');
+  const stepDone   = document.getElementById('step-done');
+  const inputName  = document.getElementById('input-name');
+  const typedName  = document.getElementById('typed-name');
+  const confirmText= document.getElementById('confirm-text');
+  const continueHint = document.getElementById('continue-hint');
+
+  let guestName = '';
+  const selectedEvents = new Set();
+
+  window.addEventListener('load', () => inputName.focus());
+
+  inputName.addEventListener('input', () => {
+    typedName.textContent = inputName.value;
+  });
+
+  stepName.addEventListener('click', () => inputName.focus());
+
+  function transition(from, to, callback) {
+    from.classList.add('exiting');
+    from.classList.remove('active');
+    setTimeout(() => {
+      from.classList.remove('exiting');
+      to.classList.add('active');
+      if (callback) callback();
+    }, 520);
+  }
+
+  inputName.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = inputName.value.trim();
+      if (!val) return;
+      guestName = val;
+      transition(stepName, stepEvents);
+    }
+  });
+
+  document.querySelectorAll('.event-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const event = item.dataset.event;
+      if (selectedEvents.has(event)) {
+        selectedEvents.delete(event);
+        item.classList.remove('selected');
+      } else {
+        selectedEvents.add(event);
+        item.classList.add('selected');
+      }
+      if (selectedEvents.size > 0) {
+        continueHint.classList.add('visible');
+      } else {
+        continueHint.classList.remove('visible');
+      }
+    });
+  });
+
+  document.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && stepEvents.classList.contains('active')) {
+      if (selectedEvents.size === 0) return;
+
+      const events = Array.from(selectedEvents);
+      transition(stepEvents, stepDone, () => {
+        confirmText.textContent = 'Thank you, ' + guestName.split(' ')[0] + '.';
+      });
+
+      try {
+        await fetch(FORMSPREE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ name: guestName, events: events.join(', ') }),
+        });
+      } catch (_) {}
+
+      const existing = JSON.parse(localStorage.getItem('rsvp_responses') || '[]');
+      existing.push({ name: guestName, events, timestamp: new Date().toISOString() });
+      localStorage.setItem('rsvp_responses', JSON.stringify(existing));
+    }
+  });
+</script>
+
+</body>
+</html>
