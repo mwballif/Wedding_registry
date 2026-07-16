@@ -131,11 +131,19 @@
       color: #999;
       letter-spacing: 0.04em;
       opacity: 0;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.4s ease, color 0.25s ease;
+      pointer-events: none;
+      cursor: pointer;
+      user-select: none;
     }
 
     .continue-hint.visible {
       opacity: 1;
+      pointer-events: all;
+    }
+
+    .continue-hint:hover {
+      color: #7B2020;
     }
 
     .confirmation {
@@ -178,7 +186,7 @@
     <div class="step" id="step-events">
       <p class="prompt">Please indicate which events you were both invited and plan to attend. Click all that apply.</p>
       <div class="event-list" id="event-list"></div>
-      <p class="continue-hint" id="continue-hint">Press enter to continue.</p>
+      <p class="continue-hint" id="continue-hint">Tap here or press enter to continue.</p>
     </div>
 
     <!-- Step 3: Confirmation -->
@@ -364,17 +372,21 @@
     }
   });
 
-  document.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && stepEvents.classList.contains('active')) {
-      if (selectedEvents.size === 0) return;
+  function finishEvents() {
+    if (!stepEvents.classList.contains('active') || selectedEvents.size === 0) return;
 
-      const events = Array.from(selectedEvents);
-      transition(stepEvents, stepDone, () => {
-        setConfirmation('We are excited to celebrate with you.' + guestSentence(guestRecord));
-      });
-      submitRSVP(events);
-    }
+    const events = Array.from(selectedEvents);
+    transition(stepEvents, stepDone, () => {
+      setConfirmation('We are excited to celebrate with you.' + guestSentence(guestRecord));
+    });
+    submitRSVP(events);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finishEvents();
   });
+
+  continueHint.addEventListener('click', finishEvents);
 </script>
 
 </body>
