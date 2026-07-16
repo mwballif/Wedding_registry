@@ -165,6 +165,15 @@
       </div>
     </div>
 
+    <!-- Step 1b: Last name -->
+    <div class="step" id="step-lastname">
+      <p class="prompt">And your last name as well, please.</p>
+      <div class="input-line">
+        <input class="input-field" id="input-lastname" type="text" autocomplete="off" spellcheck="false" />
+        <span class="typed-text" id="typed-lastname"></span><span class="cursor"></span>
+      </div>
+    </div>
+
     <!-- Step 2: Events -->
     <div class="step" id="step-events">
       <p class="prompt">Please indicate which events you were both invited and plan to attend. Click all that apply.</p>
@@ -185,6 +194,9 @@
   const ALL_EVENTS = ['Sealing', 'Ring Ceremony', 'Reception'];
 
   const stepName   = document.getElementById('step-name');
+  const stepLastname = document.getElementById('step-lastname');
+  const inputLastname = document.getElementById('input-lastname');
+  const typedLastname = document.getElementById('typed-lastname');
   const stepEvents = document.getElementById('step-events');
   const stepDone   = document.getElementById('step-done');
   const inputName  = document.getElementById('input-name');
@@ -241,6 +253,12 @@
   });
 
   stepName.addEventListener('click', () => inputName.focus());
+
+  inputLastname.addEventListener('input', () => {
+    typedLastname.textContent = inputLastname.value;
+  });
+
+  stepLastname.addEventListener('click', () => inputLastname.focus());
 
   function transition(from, to, callback) {
     from.classList.add('exiting');
@@ -304,26 +322,45 @@
     localStorage.setItem('rsvp_responses', JSON.stringify(existing));
   }
 
+  function proceedWithName(fromStep) {
+    guestRecord = findGuest(guestName);
+
+    const multipleEvents = guestRecord && guestRecord.events.length > 1;
+
+    if (multipleEvents) {
+      buildEventList(guestRecord.events);
+      transition(fromStep, stepEvents);
+    } else {
+      // Reception only (on the list with one event, or not on the list at all)
+      const record = guestRecord || { events: ['Reception'], guests: null };
+      transition(fromStep, stepDone, () => {
+        setConfirmation('We are excited to see you at the reception.' + guestSentence(record));
+      });
+      submitRSVP(record.events);
+    }
+  }
+
   inputName.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const val = inputName.value.trim();
       if (!val) return;
       guestName = val;
-      guestRecord = findGuest(val);
 
-      const multipleEvents = guestRecord && guestRecord.events.length > 1;
-
-      if (multipleEvents) {
-        buildEventList(guestRecord.events);
-        transition(stepName, stepEvents);
+      if (val.split(/\s+/).length < 2) {
+        // Only a first name — ask for the last name too
+        transition(stepName, stepLastname, () => inputLastname.focus());
       } else {
-        // Reception only (on the list with one event, or not on the list at all)
-        const record = guestRecord || { events: ['Reception'], guests: null };
-        transition(stepName, stepDone, () => {
-          setConfirmation('We are excited to see you at the reception.' + guestSentence(record));
-        });
-        submitRSVP(record.events);
+        proceedWithName(stepName);
       }
+    }
+  });
+
+  inputLastname.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = inputLastname.value.trim();
+      if (!val) return;
+      guestName = guestName + ' ' + val;
+      proceedWithName(stepLastname);
     }
   });
 
