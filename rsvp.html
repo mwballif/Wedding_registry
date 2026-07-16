@@ -169,11 +169,7 @@
     <!-- Step 2: Events -->
     <div class="step" id="step-events">
       <p class="prompt">Please indicate which events you were both invited and plan to attend. Click all that apply.</p>
-      <div class="event-list">
-        <span class="event-item" data-event="Sealing">Sealing</span>
-        <span class="event-item" data-event="Ring Ceremony">Ring Ceremony</span>
-        <span class="event-item" data-event="Reception">Reception</span>
-      </div>
+      <div class="event-list" id="event-list"></div>
       <p class="continue-hint" id="continue-hint">Press enter to continue.</p>
     </div>
 
@@ -187,6 +183,7 @@
 
 <script>
   const FORMSPREE_ENDPOINT = 'https://formspree.io/f/xzdlbpqa';
+  const ALL_EVENTS = ['Sealing', 'Ring Ceremony', 'Reception'];
 
   const stepName   = document.getElementById('step-name');
   const stepEvents = document.getElementById('step-events');
@@ -195,9 +192,48 @@
   const typedName  = document.getElementById('typed-name');
   const confirmText= document.getElementById('confirm-text');
   const continueHint = document.getElementById('continue-hint');
+  const eventList  = document.getElementById('event-list');
 
   let guestName = '';
+  let guestRecord = null;   // { name, events: [...], guests: number|null }
   const selectedEvents = new Set();
+
+  // ── Guest list loaded from guests.csv ──
+  // CSV columns: name, events (comma-separated, quoted), guests (blank = no limit)
+  let guestList = [];
+
+  function parseCSV(text) {
+    const rows = [];
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    for (let i = 1; i < lines.length; i++) {   // skip header
+      const line = lines[i];
+      const cols = [];
+      let cur = '', inQuotes = false;
+      for (const ch of line) {
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if (ch === ',' && !inQuotes) { cols.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+      cols.push(cur);
+      const name = (cols[0] || '').trim();
+      if (!name) continue;
+      const events = (cols[1] || '').split(',').map(e => e.trim()).filter(Boolean);
+      const guestsRaw = (cols[2] || '').trim();
+      const guests = guestsRaw === '' ? null : parseInt(guestsRaw, 10);
+      rows.push({ name, events, guests: Number.isFinite(guests) ? guests : null });
+    }
+    return rows;
+  }
+
+  fetch('guests.csv')
+    .then(r => r.ok ? r.text() : '')
+    .then(text => { if (text) guestList = parseCSV(text); })
+    .catch(() => {});
+
+  function findGuest(name) {
+    const normalized = name.trim().toLowerCase().replace(/\s+/g, ' ');
+    return guestList.find(g => g.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalized) || null;
+  }
 
   window.addEventListener('load', () => inputName.focus());
 
@@ -217,31 +253,71 @@
     }, 520);
   }
 
+  function firstName() {
+    return guestName.split(' ')[0];
+  }
+
+  function guestSentence(record) {
+    if (!record || record.guests === null) return '';
+    return ' We kindly ask that your family brings ' + record.guests + ' number of guests.';
+  }
+
+  function buildEventList(events) {
+    eventList.innerHTML = '';
+    events.forEach(event => {
+      const span = document.createElement('span');
+      span.className = 'event-item';
+      span.dataset.event = event;
+      span.textContent = event;
+      span.addEventListener('click', () => {
+        if (selectedEvents.has(event)) {
+          selectedEvents.delete(event);
+          span.classList.remove('selected');
+        } else {
+          selectedEvents.add(event);
+          span.classList.add('selected');
+        }
+        continueHint.classList.toggle('visible', selectedEvents.size > 0);
+      });
+      eventList.appendChild(span);
+    });
+  }
+
+  async function submitRSVP(events) {
+    try {
+      await fetch(FORMSPREE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ name: guestName, events: events.join(', ') }),
+      });
+    } catch (_) {}
+
+    const existing = JSON.parse(localStorage.getItem('rsvp_responses') || '[]');
+    existing.push({ name: guestName, events, timestamp: new Date().toISOString() });
+    localStorage.setItem('rsvp_responses', JSON.stringify(existing));
+  }
+
   inputName.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const val = inputName.value.trim();
       if (!val) return;
       guestName = val;
-      transition(stepName, stepEvents);
-    }
-  });
+      guestRecord = findGuest(val);
 
-  document.querySelectorAll('.event-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const event = item.dataset.event;
-      if (selectedEvents.has(event)) {
-        selectedEvents.delete(event);
-        item.classList.remove('selected');
+      const multipleEvents = guestRecord && guestRecord.events.length > 1;
+
+      if (multipleEvents) {
+        buildEventList(guestRecord.events);
+        transition(stepName, stepEvents);
       } else {
-        selectedEvents.add(event);
-        item.classList.add('selected');
+        // Reception only (on the list with one event, or not on the list at all)
+        const record = guestRecord || { events: ['Reception'], guests: null };
+        transition(stepName, stepDone, () => {
+          confirmText.textContent = 'Thank you, ' + firstName() + '. We are excited to see you at the reception.' + guestSentence(record);
+        });
+        submitRSVP(record.events);
       }
-      if (selectedEvents.size > 0) {
-        continueHint.classList.add('visible');
-      } else {
-        continueHint.classList.remove('visible');
-      }
-    });
+    }
   });
 
   document.addEventListener('keydown', async (e) => {
@@ -250,20 +326,9 @@
 
       const events = Array.from(selectedEvents);
       transition(stepEvents, stepDone, () => {
-        confirmText.textContent = 'Thank you, ' + guestName.split(' ')[0] + '.';
+        confirmText.textContent = 'Thank you, ' + firstName() + '. We are excited to celebrate with you.' + guestSentence(guestRecord);
       });
-
-      try {
-        await fetch(FORMSPREE_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ name: guestName, events: events.join(', ') }),
-        });
-      } catch (_) {}
-
-      const existing = JSON.parse(localStorage.getItem('rsvp_responses') || '[]');
-      existing.push({ name: guestName, events, timestamp: new Date().toISOString() });
-      localStorage.setItem('rsvp_responses', JSON.stringify(existing));
+      submitRSVP(events);
     }
   });
 </script>
