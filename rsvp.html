@@ -186,7 +186,7 @@
     <div class="step" id="step-events">
       <p class="prompt">Please indicate which events you were both invited and plan to attend. Click all that apply.</p>
       <div class="event-list" id="event-list"></div>
-      <p class="continue-hint" id="continue-hint">Tap here or press enter to continue.</p>
+      <p class="continue-hint" id="continue-hint">Press enter to continue.</p>
     </div>
 
     <!-- Step 3: Confirmation -->
@@ -387,6 +387,11 @@
   });
 
   continueHint.addEventListener('click', finishEvents);
+
+  // Touch devices have no enter key once the keyboard is dismissed
+  if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+    continueHint.textContent = 'Tap here to continue.';
+  }
 </script>
 
 </body>
