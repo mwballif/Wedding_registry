@@ -144,7 +144,6 @@
       color: #1a1a1a;
       line-height: 1.7;
       letter-spacing: 0.01em;
-      font-style: italic;
     }
 
     .steps-wrapper {
@@ -259,7 +258,15 @@
 
   function guestSentence(record) {
     if (!record || record.guests === null) return '';
-    return ' We kindly ask that your family brings ' + record.guests + ' number of guests.';
+    return ' We kindly ask that your family limits attendance to ' + record.guests + ' guests.';
+  }
+
+  function setConfirmation(rest) {
+    confirmText.innerHTML = '';
+    const em = document.createElement('em');
+    em.textContent = 'Thank you, ' + firstName() + '.';
+    confirmText.appendChild(em);
+    confirmText.appendChild(document.createTextNode(' ' + rest));
   }
 
   function buildEventList(events) {
@@ -313,7 +320,7 @@
         // Reception only (on the list with one event, or not on the list at all)
         const record = guestRecord || { events: ['Reception'], guests: null };
         transition(stepName, stepDone, () => {
-          confirmText.textContent = 'Thank you, ' + firstName() + '. We are excited to see you at the reception.' + guestSentence(record);
+          setConfirmation('We are excited to see you at the reception.' + guestSentence(record));
         });
         submitRSVP(record.events);
       }
@@ -326,7 +333,7 @@
 
       const events = Array.from(selectedEvents);
       transition(stepEvents, stepDone, () => {
-        confirmText.textContent = 'Thank you, ' + firstName() + '. We are excited to celebrate with you.' + guestSentence(guestRecord);
+        setConfirmation('We are excited to celebrate with you.' + guestSentence(guestRecord));
       });
       submitRSVP(events);
     }
