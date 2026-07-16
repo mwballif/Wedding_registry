@@ -249,9 +249,46 @@
     .then(text => { if (text) guestList = parseCSV(text); })
     .catch(() => {});
 
+  function normalizeName(name) {
+    return name.trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
+  }
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) {
+        cur[j] = Math.min(
+          prev[j] + 1,
+          cur[j - 1] + 1,
+          prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
   function findGuest(name) {
-    const normalized = name.trim().toLowerCase().replace(/\s+/g, ' ');
-    return guestList.find(g => g.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalized) || null;
+    const normalized = normalizeName(name);
+    if (!normalized) return null;
+
+    // Exact match first
+    const exact = guestList.find(g => normalizeName(g.name) === normalized);
+    if (exact) return exact;
+
+    // Fuzzy match: closest name within a small typo distance
+    let best = null, bestDist = Infinity;
+    for (const g of guestList) {
+      const dist = levenshtein(normalizeName(g.name), normalized);
+      if (dist < bestDist) { bestDist = dist; best = g; }
+    }
+    const threshold = normalized.length <= 8 ? 1 : 2;
+    return bestDist <= threshold ? best : null;
   }
 
   window.addEventListener('load', () => inputName.focus());
